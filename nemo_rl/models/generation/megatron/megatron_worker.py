@@ -1207,6 +1207,7 @@ class MegatronGenerationMixin:
                 if self.cfg["generation"].get("ignore_eos", False)
                 else self.megatron_tokenizer.eod
             ),
+            stop_token_ids=self.cfg["generation"].get("stop_token_ids"),
             stop_words=stop_words,
             return_prompt_tokens=return_prompt_tokens,
             detokenize_stop_sequence=True,
@@ -1290,7 +1291,12 @@ class MegatronGenerationMixin:
         input_lengths = data["input_lengths"]
         input_ids = data["input_ids"]
         batch_size = input_ids.size(0)
-        max_gen_seq_len = max(len(x.generated_tokens) for x in result)
+        if len(result) != batch_size:
+            raise RuntimeError(
+                "Megatron inference reply count does not match the submitted "
+                f"batch size: replies={len(result)}, batch={batch_size}."
+            )
+        max_gen_seq_len = max((len(x.generated_tokens) for x in result), default=0)
         padded_input_length = input_ids.size(1)
 
         expected_prompt_lengths = [int(length) for length in input_lengths.tolist()]
@@ -1307,6 +1313,28 @@ class MegatronGenerationMixin:
                     "processor input lengths: "
                     f"inference={inference_prompt_lengths}, "
                     f"training={expected_prompt_lengths}."
+                )
+            for i, reply in enumerate(result):
+                if reply.prompt_tokens is None:
+                    continue
+                echoed_prompt = (
+                    reply.prompt_tokens.tolist()
+                    if isinstance(reply.prompt_tokens, torch.Tensor)
+                    else list(reply.prompt_tokens)
+                )
+                expected_prompt = input_ids[i, : input_lengths[i]].tolist()
+                if echoed_prompt != expected_prompt:
+                    raise RuntimeError(
+                        "Megatron inference prompt tokens do not match the "
+                        f"submitted input for row {i}."
+                    )
+
+        for i, reply in enumerate(result):
+            if len(reply.generated_tokens) != len(reply.generated_log_probs):
+                raise RuntimeError(
+                    "Megatron inference generated token/logprob lengths do not "
+                    f"match for row {i}: tokens={len(reply.generated_tokens)}, "
+                    f"logprobs={len(reply.generated_log_probs)}."
                 )
 
         max_seq_len = padded_input_length + max_gen_seq_len
@@ -1328,6 +1356,11 @@ class MegatronGenerationMixin:
         )
         unpadded_sequence_lengths = torch.zeros(
             batch_size, dtype=torch.long, device=input_ids.device
+        )
+        truncated = torch.tensor(
+            [getattr(reply, "finish_reason", None) == "length" for reply in result],
+            dtype=torch.bool,
+            device=input_ids.device,
         )
         for i in range(batch_size):
             # Take the prompt from the request we submitted rather than from the
@@ -1358,6 +1391,7 @@ class MegatronGenerationMixin:
             "logprobs": logprobs_padded,
             "generation_lengths": generation_lengths,
             "unpadded_sequence_lengths": unpadded_sequence_lengths,
+            "truncated": truncated,
         }
 
         return BatchedDataDict.from_batches([out_dict]).to("cpu")

@@ -593,6 +593,7 @@ def test_sampling_params_can_ignore_eos(
             "top_p": 1.0,
             "max_new_tokens": 8,
             "ignore_eos": ignore_eos,
+            "stop_token_ids": [42, 17],
         }
     }
     worker.megatron_tokenizer = SimpleNamespace(eod=42)
@@ -604,6 +605,7 @@ def test_sampling_params_can_ignore_eos(
     params = worker._build_sampling_params(greedy=False, stop_words=None)
 
     assert params["termination_id"] == expected_termination_id
+    assert params["stop_token_ids"] == [42, 17]
 
 
 @pytest.mark.mcore
