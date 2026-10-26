@@ -1291,7 +1291,12 @@ class MegatronGenerationMixin:
         input_lengths = data["input_lengths"]
         input_ids = data["input_ids"]
         batch_size = input_ids.size(0)
-        max_gen_seq_len = max(len(x.generated_tokens) for x in result)
+        if len(result) != batch_size:
+            raise RuntimeError(
+                "Megatron inference reply count does not match the submitted "
+                f"batch size: replies={len(result)}, batch={batch_size}."
+            )
+        max_gen_seq_len = max((len(x.generated_tokens) for x in result), default=0)
         padded_input_length = input_ids.size(1)
 
         expected_prompt_lengths = [int(length) for length in input_lengths.tolist()]

@@ -276,6 +276,15 @@ def test_rejects_generated_token_logprob_mismatch(two_sample_batch):
 
 
 @pytest.mark.mcore
+@pytest.mark.parametrize("reply_count", [0, 1, 3])
+def test_rejects_reply_count_mismatch(two_sample_batch, reply_count):
+    reply = FakeInferenceReply(generated_tokens=[11], generated_log_probs=[-0.1])
+
+    with pytest.raises(RuntimeError, match="reply count does not match"):
+        parse(two_sample_batch, [reply] * reply_count)
+
+
+@pytest.mark.mcore
 def test_reports_length_finish_as_truncated(two_sample_batch):
     result = [
         FakeInferenceReply(
