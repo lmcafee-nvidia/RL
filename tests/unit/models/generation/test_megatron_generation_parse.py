@@ -214,8 +214,8 @@ def test_packs_replies_that_omit_prompt_tokens(two_sample_batch):
 
 
 @pytest.mark.mcore
-def test_ignores_echoed_prompt_tokens(two_sample_batch):
-    """An engine that does echo the prompt back must not change the output.
+def test_accepts_matching_echoed_prompt_tokens(two_sample_batch):
+    """An engine that echoes the submitted prompt must not change the output.
 
     The prompt is taken from the submitted batch either way, so the two mcore
     behaviours are indistinguishable downstream and no version branch is needed.
@@ -247,6 +247,32 @@ def test_ignores_echoed_prompt_tokens(two_sample_batch):
         "unpadded_sequence_lengths",
     ):
         torch.testing.assert_close(echoed[key], baseline[key])
+
+
+@pytest.mark.mcore
+def test_rejects_echoed_prompt_token_mismatch(two_sample_batch):
+    result = [
+        FakeInferenceReply(
+            generated_tokens=[11],
+            generated_log_probs=[-0.1],
+            prompt_tokens=torch.tensor([5, 99, 7], dtype=torch.long),
+        ),
+        FakeInferenceReply(generated_tokens=[13], generated_log_probs=[-0.3]),
+    ]
+
+    with pytest.raises(RuntimeError, match="prompt tokens do not match"):
+        parse(two_sample_batch, result)
+
+
+@pytest.mark.mcore
+def test_rejects_generated_token_logprob_mismatch(two_sample_batch):
+    result = [
+        FakeInferenceReply(generated_tokens=[11, 12], generated_log_probs=[-0.1]),
+        FakeInferenceReply(generated_tokens=[13], generated_log_probs=[-0.3]),
+    ]
+
+    with pytest.raises(RuntimeError, match="token/logprob lengths do not match"):
+        parse(two_sample_batch, result)
 
 
 @pytest.mark.mcore
