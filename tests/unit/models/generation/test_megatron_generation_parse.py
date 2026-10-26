@@ -155,10 +155,12 @@ class FakeInferenceReply:
         generated_tokens: list[int],
         generated_log_probs: list[float],
         prompt_tokens: torch.Tensor | None = None,
+        finish_reason: str | None = None,
     ) -> None:
         self.prompt_tokens = prompt_tokens
         self.generated_tokens = generated_tokens
         self.generated_log_probs = generated_log_probs
+        self.finish_reason = finish_reason
 
 
 def parse(data: BatchedDataDict, result: list[FakeInferenceReply]) -> BatchedDataDict:
@@ -203,6 +205,7 @@ def test_packs_replies_that_omit_prompt_tokens(two_sample_batch):
     # sample 1's tokens must land at index 2 rather than 4.
     torch.testing.assert_close(out["generation_lengths"], torch.tensor([2, 1]))
     torch.testing.assert_close(out["unpadded_sequence_lengths"], torch.tensor([5, 3]))
+    torch.testing.assert_close(out["truncated"], torch.tensor([False, False]))
 
     expected_logprobs = torch.zeros(2, 6)
     expected_logprobs[0, 3:5] = torch.tensor([-0.1, -0.2])
@@ -244,6 +247,26 @@ def test_ignores_echoed_prompt_tokens(two_sample_batch):
         "unpadded_sequence_lengths",
     ):
         torch.testing.assert_close(echoed[key], baseline[key])
+
+
+@pytest.mark.mcore
+def test_reports_length_finish_as_truncated(two_sample_batch):
+    result = [
+        FakeInferenceReply(
+            generated_tokens=[11],
+            generated_log_probs=[-0.1],
+            finish_reason="length",
+        ),
+        FakeInferenceReply(
+            generated_tokens=[13],
+            generated_log_probs=[-0.3],
+            finish_reason="stop",
+        ),
+    ]
+
+    torch.testing.assert_close(
+        parse(two_sample_batch, result)["truncated"], torch.tensor([True, False])
+    )
 
 
 @pytest.mark.mcore
