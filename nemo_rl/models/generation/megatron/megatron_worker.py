@@ -1308,6 +1308,28 @@ class MegatronGenerationMixin:
                     f"inference={inference_prompt_lengths}, "
                     f"training={expected_prompt_lengths}."
                 )
+            for i, reply in enumerate(result):
+                if reply.prompt_tokens is None:
+                    continue
+                echoed_prompt = (
+                    reply.prompt_tokens.tolist()
+                    if isinstance(reply.prompt_tokens, torch.Tensor)
+                    else list(reply.prompt_tokens)
+                )
+                expected_prompt = input_ids[i, : input_lengths[i]].tolist()
+                if echoed_prompt != expected_prompt:
+                    raise RuntimeError(
+                        "Megatron inference prompt tokens do not match the "
+                        f"submitted input for row {i}."
+                    )
+
+        for i, reply in enumerate(result):
+            if len(reply.generated_tokens) != len(reply.generated_log_probs):
+                raise RuntimeError(
+                    "Megatron inference generated token/logprob lengths do not "
+                    f"match for row {i}: tokens={len(reply.generated_tokens)}, "
+                    f"logprobs={len(reply.generated_log_probs)}."
+                )
 
         max_seq_len = padded_input_length + max_gen_seq_len
         output_ids_padded = torch.full(
