@@ -1207,6 +1207,7 @@ class MegatronGenerationMixin:
                 if self.cfg["generation"].get("ignore_eos", False)
                 else self.megatron_tokenizer.eod
             ),
+            stop_token_ids=self.cfg["generation"].get("stop_token_ids"),
             stop_words=stop_words,
             return_prompt_tokens=return_prompt_tokens,
             detokenize_stop_sequence=True,
