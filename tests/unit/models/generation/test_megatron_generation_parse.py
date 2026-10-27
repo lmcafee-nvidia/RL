@@ -247,6 +247,44 @@ def test_ignores_echoed_prompt_tokens(two_sample_batch):
 
 
 @pytest.mark.mcore
+def test_rejects_echoed_prompt_token_mismatch(two_sample_batch):
+    """An echoed prompt that differs from the submitted row is a protocol error."""
+    result = [
+        FakeInferenceReply(
+            generated_tokens=[11],
+            generated_log_probs=[-0.1],
+            prompt_tokens=torch.tensor([5, 99, 7], dtype=torch.long),
+        ),
+        FakeInferenceReply(generated_tokens=[13], generated_log_probs=[-0.3]),
+    ]
+
+    with pytest.raises(RuntimeError, match="prompt tokens do not match"):
+        parse(two_sample_batch, result)
+
+
+@pytest.mark.mcore
+def test_rejects_generated_token_logprob_mismatch(two_sample_batch):
+    """Every generated token must have exactly one log probability."""
+    result = [
+        FakeInferenceReply(generated_tokens=[11, 12], generated_log_probs=[-0.1]),
+        FakeInferenceReply(generated_tokens=[13], generated_log_probs=[-0.3]),
+    ]
+
+    with pytest.raises(RuntimeError, match="token/logprob lengths do not match"):
+        parse(two_sample_batch, result)
+
+
+@pytest.mark.mcore
+@pytest.mark.parametrize("reply_count", [0, 1, 3])
+def test_rejects_reply_count_mismatch(two_sample_batch, reply_count):
+    """The engine must return exactly one reply per submitted row."""
+    reply = FakeInferenceReply(generated_tokens=[11], generated_log_probs=[-0.1])
+
+    with pytest.raises(RuntimeError, match="reply count does not match"):
+        parse(two_sample_batch, [reply] * reply_count)
+
+
+@pytest.mark.mcore
 def test_handles_a_reply_with_no_generated_tokens(two_sample_batch):
     """A request that produced nothing must yield the prompt and a zero length."""
     result = [
