@@ -247,6 +247,21 @@ def test_ignores_echoed_prompt_tokens(two_sample_batch):
 
 
 @pytest.mark.mcore
+def test_handles_a_reply_with_no_generated_tokens(two_sample_batch):
+    """A request that produced nothing must yield the prompt and a zero length."""
+    result = [
+        FakeInferenceReply(generated_tokens=[], generated_log_probs=[]),
+        FakeInferenceReply(generated_tokens=[13], generated_log_probs=[-0.3]),
+    ]
+
+    out = parse(two_sample_batch, result)
+
+    torch.testing.assert_close(out["generation_lengths"], torch.tensor([0, 1]))
+    torch.testing.assert_close(out["unpadded_sequence_lengths"], torch.tensor([3, 3]))
+    assert out["output_ids"][0].tolist() == [5, 6, 7, PAD, PAD]
+
+
+@pytest.mark.mcore
 def test_rejects_echoed_prompt_token_mismatch(two_sample_batch):
     """An echoed prompt that differs from the submitted row is a protocol error."""
     result = [
@@ -282,21 +297,6 @@ def test_rejects_reply_count_mismatch(two_sample_batch, reply_count):
 
     with pytest.raises(RuntimeError, match="reply count does not match"):
         parse(two_sample_batch, [reply] * reply_count)
-
-
-@pytest.mark.mcore
-def test_handles_a_reply_with_no_generated_tokens(two_sample_batch):
-    """A request that produced nothing must yield the prompt and a zero length."""
-    result = [
-        FakeInferenceReply(generated_tokens=[], generated_log_probs=[]),
-        FakeInferenceReply(generated_tokens=[13], generated_log_probs=[-0.3]),
-    ]
-
-    out = parse(two_sample_batch, result)
-
-    torch.testing.assert_close(out["generation_lengths"], torch.tensor([0, 1]))
-    torch.testing.assert_close(out["unpadded_sequence_lengths"], torch.tensor([3, 3]))
-    assert out["output_ids"][0].tolist() == [5, 6, 7, PAD, PAD]
 
 
 @pytest.mark.mcore
