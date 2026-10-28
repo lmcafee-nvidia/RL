@@ -606,6 +606,29 @@ def test_sampling_params_can_ignore_eos(
     assert params["termination_id"] == expected_termination_id
 
 
+def test_sampling_params_forward_stop_token_ids(monkeypatch):
+    """Configured stop token IDs must reach MCore's sampling parameters."""
+    worker = object.__new__(MegatronGenerationMixin)
+    worker.cfg = {
+        "generation": {
+            "temperature": 1.0,
+            "top_k": None,
+            "top_p": 1.0,
+            "max_new_tokens": 8,
+            "stop_token_ids": [42, 17],
+        }
+    }
+    worker.megatron_tokenizer = SimpleNamespace(eod=42)
+    monkeypatch.setattr(
+        "nemo_rl.models.generation.megatron.megatron_worker.SamplingParams",
+        lambda **kwargs: kwargs,
+    )
+
+    params = worker._build_sampling_params(greedy=False, stop_words=None)
+
+    assert params["stop_token_ids"] == [42, 17]
+
+
 @pytest.mark.mcore
 def test_multimodal_preprocessing_requires_policy_processor():
     class _ImageWrapper:
