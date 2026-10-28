@@ -1359,6 +1359,11 @@ class MegatronGenerationMixin:
         unpadded_sequence_lengths = torch.zeros(
             batch_size, dtype=torch.long, device=input_ids.device
         )
+        truncated = torch.tensor(
+            [getattr(reply, "finish_reason", None) == "length" for reply in result],
+            dtype=torch.bool,
+            device=input_ids.device,
+        )
         for i in range(batch_size):
             # Take the prompt from the request we submitted rather than from the
             # engine's reply. Multimodal requests do set
@@ -1388,6 +1393,7 @@ class MegatronGenerationMixin:
             "logprobs": logprobs_padded,
             "generation_lengths": generation_lengths,
             "unpadded_sequence_lengths": unpadded_sequence_lengths,
+            "truncated": truncated,
         }
 
         return BatchedDataDict.from_batches([out_dict]).to("cpu")
